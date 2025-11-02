@@ -17,8 +17,7 @@
 	"services": [
 		{
 			"binding": "AUTH_SERVICE",
-			"service": "ohishi-auth",
-			"environment": "production"
+			"service": "cloudflare-auth-worker"
 		}
 	]
 	/**
