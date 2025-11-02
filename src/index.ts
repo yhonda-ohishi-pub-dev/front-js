@@ -5,13 +5,17 @@
  * and provides direct connection capabilities.
  */
 
+interface TunnelData {
+	clientId: string;
+	tunnelUrl: string;
+	updatedAt: number;
+	createdAt: number;
+}
+
 interface TunnelResponse {
-	tunnels: Array<{
-		id: string;
-		url: string;
-		name?: string;
-		status?: string;
-	}>;
+	success: boolean;
+	data: TunnelData[];
+	count: number;
 }
 
 export default {
@@ -134,8 +138,8 @@ export default {
 					);
 				}
 
-				const data: TunnelResponse = await response.json();
-				const tunnel = data.tunnels.find(t => t.id === tunnelId);
+				const apiResponse: TunnelResponse = await response.json();
+				const tunnel = apiResponse.data.find((t: TunnelData) => t.clientId === tunnelId);
 
 				if (!tunnel) {
 					return new Response(
@@ -151,7 +155,7 @@ export default {
 				}
 
 				// Proxy request to the tunnel URL
-				const tunnelResponse = await fetch(tunnel.url, {
+				const tunnelResponse = await fetch(tunnel.tunnelUrl, {
 					method: request.method,
 					headers: request.headers,
 					body: request.body,
