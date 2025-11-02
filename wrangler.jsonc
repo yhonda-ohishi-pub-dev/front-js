@@ -14,9 +14,16 @@
 	 * Environment Variables
 	 * https://developers.cloudflare.com/workers/wrangler/configuration/#environment-variables
 	 */
-	"vars": {
-		"TUNNEL_ACCESS_KEY": "placeholder-change-in-dashboard"
-	},
+	// "vars": {
+	// 	"EXAMPLE_VAR": "value"
+	// },
+	/**
+	 * Secrets (sensitive data like API keys)
+	 * Set via: wrangler secret put ALLOWED_CLIENT_IDS
+	 * Format: Comma-separated list of allowed client IDs
+	 * Example: "gowinproc,testclient,production-client"
+	 * https://developers.cloudflare.com/workers/configuration/secrets/
+	 */
 	/**
 	 * Service Bindings (communicate between multiple Workers)
 	 * https://developers.cloudflare.com/workers/wrangler/configuration/#service-bindings

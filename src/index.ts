@@ -122,6 +122,25 @@ export default {
 			const remainingPath = tunnelMatch[2] || ''; // Path after /tunnel/:id
 
 			try {
+				// Check if client ID is allowed
+				if (env.ALLOWED_CLIENT_IDS) {
+					const allowedIds = env.ALLOWED_CLIENT_IDS.split(',').map((id: string) => id.trim());
+					if (!allowedIds.includes(tunnelId)) {
+						return new Response(
+							JSON.stringify({
+								error: 'Forbidden',
+								message: 'このクライアントIDへのアクセスは許可されていません。'
+							}),
+							{
+								status: 403,
+								headers: {
+									'Content-Type': 'application/json',
+									...corsHeaders,
+								},
+							}
+						);
+					}
+				}
 				// First, get the list of tunnels
 				const authUrl = 'https://ohishi-auth.mtamaramu.com/tunnels';
 
