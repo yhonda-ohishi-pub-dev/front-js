@@ -75,9 +75,21 @@ export default {
 					);
 				}
 
-				const data: TunnelResponse = await response.json();
+				const apiResponse: TunnelResponse = await response.json();
 
-				return new Response(JSON.stringify(data), {
+				// Hide tunnel URLs from public response for security
+				const sanitizedData = {
+					success: apiResponse.success,
+					data: apiResponse.data.map(tunnel => ({
+						clientId: tunnel.clientId,
+						updatedAt: tunnel.updatedAt,
+						createdAt: tunnel.createdAt,
+						// tunnelUrl is intentionally omitted for security
+					})),
+					count: apiResponse.count,
+				};
+
+				return new Response(JSON.stringify(sanitizedData), {
 					status: 200,
 					headers: {
 						'Content-Type': 'application/json',
@@ -103,10 +115,11 @@ export default {
 			}
 		}
 
-		// Route: GET /tunnel/:id - Connect to specific tunnel
-		const tunnelMatch = url.pathname.match(/^\/tunnel\/([^\/]+)$/);
-		if (tunnelMatch && request.method === 'GET') {
+		// Route: /tunnel/:id/* - Connect to specific tunnel and proxy all paths
+		const tunnelMatch = url.pathname.match(/^\/tunnel\/([^\/]+)(\/.*)?$/);
+		if (tunnelMatch) {
 			const tunnelId = tunnelMatch[1];
+			const remainingPath = tunnelMatch[2] || ''; // Path after /tunnel/:id
 
 			try {
 				// First, get the list of tunnels
@@ -154,8 +167,12 @@ export default {
 					);
 				}
 
-				// Proxy request to the tunnel URL
-				const tunnelResponse = await fetch(tunnel.tunnelUrl, {
+				// Proxy request to the tunnel URL with remaining path
+				const targetUrl = new URL(tunnel.tunnelUrl);
+				targetUrl.pathname = remainingPath;
+				targetUrl.search = url.search; // Preserve query parameters
+
+				const tunnelResponse = await fetch(targetUrl.toString(), {
 					method: request.method,
 					headers: request.headers,
 					body: request.body,
