@@ -1,18 +1,201 @@
 /**
- * Welcome to Cloudflare Workers! This is your first worker.
+ * Cloudflare Worker for Tunnel URL Management
  *
- * - Run `npm run dev` in your terminal to start a development server
- * - Open a browser tab at http://localhost:8787/ to see your worker in action
- * - Run `npm run deploy` to publish your worker
- *
- * Bind resources to your worker in `wrangler.jsonc`. After adding bindings, a type definition for the
- * `Env` object can be regenerated with `npm run cf-typegen`.
- *
- * Learn more at https://developers.cloudflare.com/workers/
+ * This worker fetches tunnel URLs from ohishi-auth.mtamaramu.com
+ * and provides direct connection capabilities.
  */
 
+interface TunnelResponse {
+	tunnels: Array<{
+		id: string;
+		url: string;
+		name?: string;
+		status?: string;
+	}>;
+}
+
 export default {
-	async fetch(request, env, ctx): Promise<Response> {
-		return new Response('Hello World!');
+	async fetch(request: Request, env: Env, _ctx: ExecutionContext): Promise<Response> {
+		const url = new URL(request.url);
+
+		// CORS headers for browser access
+		const corsHeaders = {
+			'Access-Control-Allow-Origin': '*',
+			'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+			'Access-Control-Allow-Headers': 'Content-Type',
+		};
+
+		// Handle CORS preflight
+		if (request.method === 'OPTIONS') {
+			return new Response(null, {
+				headers: corsHeaders,
+			});
+		}
+
+		// Route: GET /tunnels - Fetch tunnel URLs
+		if (url.pathname === '/tunnels' && request.method === 'GET') {
+			try {
+				// Fetch from ohishi-auth.mtamaramu.com
+				const authUrl = 'https://ohishi-auth.mtamaramu.com/tunnels';
+
+				let response: Response;
+
+				// Use Service Binding if available
+				if (env.AUTH_SERVICE) {
+					response = await env.AUTH_SERVICE.fetch(new Request(authUrl, {
+						method: 'GET',
+						headers: request.headers,
+					}));
+				} else {
+					// Fallback to direct fetch
+					response = await fetch(authUrl, {
+						method: 'GET',
+						headers: request.headers,
+					});
+				}
+
+				if (!response.ok) {
+					return new Response(
+						JSON.stringify({
+							error: 'Failed to fetch tunnels',
+							status: response.status,
+							statusText: response.statusText
+						}),
+						{
+							status: response.status,
+							headers: {
+								'Content-Type': 'application/json',
+								...corsHeaders,
+							},
+						}
+					);
+				}
+
+				const data: TunnelResponse = await response.json();
+
+				return new Response(JSON.stringify(data), {
+					status: 200,
+					headers: {
+						'Content-Type': 'application/json',
+						'Cache-Control': 'public, max-age=60',
+						...corsHeaders,
+					},
+				});
+
+			} catch (error) {
+				return new Response(
+					JSON.stringify({
+						error: 'Internal server error',
+						message: error instanceof Error ? error.message : 'Unknown error'
+					}),
+					{
+						status: 500,
+						headers: {
+							'Content-Type': 'application/json',
+							...corsHeaders,
+						},
+					}
+				);
+			}
+		}
+
+		// Route: GET /tunnel/:id - Connect to specific tunnel
+		const tunnelMatch = url.pathname.match(/^\/tunnel\/([^\/]+)$/);
+		if (tunnelMatch && request.method === 'GET') {
+			const tunnelId = tunnelMatch[1];
+
+			try {
+				// First, get the list of tunnels
+				const authUrl = 'https://ohishi-auth.mtamaramu.com/tunnels';
+
+				let response: Response;
+				if (env.AUTH_SERVICE) {
+					response = await env.AUTH_SERVICE.fetch(new Request(authUrl, {
+						method: 'GET',
+						headers: request.headers,
+					}));
+				} else {
+					response = await fetch(authUrl, {
+						method: 'GET',
+						headers: request.headers,
+					});
+				}
+
+				if (!response.ok) {
+					return new Response(
+						JSON.stringify({ error: 'Failed to fetch tunnels' }),
+						{
+							status: response.status,
+							headers: {
+								'Content-Type': 'application/json',
+								...corsHeaders,
+							},
+						}
+					);
+				}
+
+				const data: TunnelResponse = await response.json();
+				const tunnel = data.tunnels.find(t => t.id === tunnelId);
+
+				if (!tunnel) {
+					return new Response(
+						JSON.stringify({ error: 'Tunnel not found' }),
+						{
+							status: 404,
+							headers: {
+								'Content-Type': 'application/json',
+								...corsHeaders,
+							},
+						}
+					);
+				}
+
+				// Proxy request to the tunnel URL
+				const tunnelResponse = await fetch(tunnel.url, {
+					method: request.method,
+					headers: request.headers,
+					body: request.body,
+				});
+
+				return new Response(tunnelResponse.body, {
+					status: tunnelResponse.status,
+					statusText: tunnelResponse.statusText,
+					headers: tunnelResponse.headers,
+				});
+
+			} catch (error) {
+				return new Response(
+					JSON.stringify({
+						error: 'Failed to connect to tunnel',
+						message: error instanceof Error ? error.message : 'Unknown error'
+					}),
+					{
+						status: 500,
+						headers: {
+							'Content-Type': 'application/json',
+							...corsHeaders,
+						},
+					}
+				);
+			}
+		}
+
+		// Default route
+		return new Response(
+			JSON.stringify({
+				message: 'Tunnel URL Service',
+				endpoints: {
+					'/tunnels': 'GET - List all available tunnels',
+					'/tunnel/:id': 'GET - Connect to a specific tunnel by ID'
+				}
+			}),
+			{
+				status: 200,
+				headers: {
+					'Content-Type': 'application/json',
+					...corsHeaders,
+				},
+			}
+		);
 	},
 } satisfies ExportedHandler<Env>;

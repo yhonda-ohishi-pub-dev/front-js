@@ -9,7 +9,18 @@
 	"compatibility_date": "2025-11-01",
 	"observability": {
 		"enabled": true
-	}
+	},
+	/**
+	 * Service Bindings (communicate between multiple Workers)
+	 * https://developers.cloudflare.com/workers/wrangler/configuration/#service-bindings
+	 */
+	"services": [
+		{
+			"binding": "AUTH_SERVICE",
+			"service": "ohishi-auth",
+			"environment": "production"
+		}
+	]
 	/**
 	 * Smart Placement
 	 * Docs: https://developers.cloudflare.com/workers/configuration/smart-placement/#smart-placement
