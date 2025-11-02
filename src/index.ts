@@ -205,9 +205,19 @@ export default {
 		return new Response(
 			JSON.stringify({
 				message: 'Tunnel URL Service',
+				version: '1.0.0',
 				endpoints: {
-					'/tunnels': 'GET - List all available tunnels',
-					'/tunnel/:id': 'GET - Connect to a specific tunnel by ID'
+					'GET /tunnels': 'トンネルリストを取得（トンネルURLは非表示）',
+					'ALL /tunnel/:clientId/*': '指定されたトンネルにプロキシ接続（全てのHTTPメソッド、パス、クエリパラメータをサポート）'
+				},
+				examples: [
+					'GET /tunnels',
+					'GET /tunnel/gowinproc',
+					'POST /tunnel/gowinproc/api/some-endpoint',
+					'GET /tunnel/testclient/path/to/resource?query=value'
+				],
+				security: {
+					note: 'トンネルURLは外部に公開されません。Auth Workerで管理されています。'
 				}
 			}),
 			{
