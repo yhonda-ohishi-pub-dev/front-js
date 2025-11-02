@@ -6,7 +6,9 @@ Cloudflare Workerを使用して、`ohishi-auth.mtamaramu.com`からTunnel URL�
 
 - **Tunnel URLリストの取得**: `ohishi-auth.mtamaramu.com`からアクティブなトンネルのURLリストを取得
 - **Service Binding**: Cloudflare Service Bindingを使用した効率的な内部通信
-- **Tunnelプロキシ**: 特定のトンネルIDを指定して直接接続
+- **Tunnelプロキシ**: 特定のトンネルIDを指定して直接接続（全HTTPメソッド、ネストされたパス対応）
+- **クライアントID制限**: シークレットで許可されたクライアントIDのみアクセス可能
+- **トンネルURL保護**: 外部にトンネルURLを公開しない
 - **CORS対応**: ブラウザからのアクセスをサポート
 
 ## エンドポイント
@@ -14,25 +16,46 @@ Cloudflare Workerを使用して、`ohishi-auth.mtamaramu.com`からTunnel URL�
 ### GET `/tunnels`
 アクティブなトンネルのリストを取得します。
 
+**セキュリティ注意**: トンネルURLは応答から除外されています。
+
 **レスポンス例:**
 ```json
 {
-  "tunnels": [
+  "success": true,
+  "data": [
     {
-      "id": "tunnel-123",
-      "url": "https://example.cloudflareaccess.com",
-      "name": "Production Tunnel",
-      "status": "active"
+      "clientId": "gowinproc",
+      "updatedAt": 1762082433166,
+      "createdAt": 1762082433166
     }
-  ]
+  ],
+  "count": 1
 }
 ```
 
-### GET `/tunnel/:id`
-特定のトンネルIDに対してリクエストをプロキシします。
+### ALL `/tunnel/:clientId/*`
+特定のクライアントIDのトンネルに対してリクエストをプロキシします。
 
 **パラメータ:**
-- `id`: トンネルID
+- `clientId`: クライアントID（許可リストに登録されている必要があります）
+- `*`: 任意のパスとクエリパラメータ
+
+**例:**
+```bash
+# ルートページ
+GET https://front-js.m-tama-ramu.workers.dev/tunnel/gowinproc
+
+# APIエンドポイント
+POST https://front-js.m-tama-ramu.workers.dev/tunnel/gowinproc/api/endpoint
+
+# クエリパラメータ付き
+GET https://front-js.m-tama-ramu.workers.dev/tunnel/testclient/resource?key=value
+```
+
+**エラーレスポンス:**
+- `403 Forbidden`: クライアントIDが許可リストにない場合
+- `404 Not Found`: トンネルが見つからない場合
+- `500 Internal Server Error`: プロキシ接続に失敗した場合
 
 ## セットアップ
 
@@ -42,19 +65,33 @@ npm install
 ```
 
 ### 2. Service Bindingの設定
-`wrangler.jsonc`で、`ohishi-auth` Workerへのバインディングが設定されています:
+`wrangler.jsonc`で、`cloudflare-auth-worker` Workerへのバインディングが設定されています:
 
 ```jsonc
 "services": [
   {
     "binding": "AUTH_SERVICE",
-    "service": "ohishi-auth",
-    "environment": "production"
+    "service": "cloudflare-auth-worker"
   }
 ]
 ```
 
-### 3. 型定義の生成
+### 3. 許可されたクライアントIDの設定
+
+**本番環境:**
+```bash
+wrangler secret put ALLOWED_CLIENT_IDS
+# 入力: gowinproc,testclient,production-client
+```
+
+**ローカル開発環境:**
+
+`.dev.vars` ファイルを作成（gitignore済み）:
+```bash
+ALLOWED_CLIENT_IDS=gowinproc,testclient
+```
+
+### 4. 型定義の生成
 ```bash
 npm run cf-typegen
 ```
@@ -96,22 +133,46 @@ Tunnel URLs
 - **コスト削減**: 内部通信は外部リクエストとしてカウントされない
 - **セキュリティ**: 外部に公開せずにWorker間で通信可能
 
-## セキュリティに関する注意
+## セキュリティ
 
-現在のバージョンでは、認証とセキュリティ機能は実装されていません。本番環境で使用する前に、以下の対策を実装してください:
+### 実装済みのセキュリティ機能
 
-- API認証（API Keyまたはトークンベース認証）
-- レート制限
-- Cloudflare Access統合
-- ログと監視
+- ✅ **クライアントID制限**: Cloudflareシークレットで管理された許可リストによるアクセス制御
+- ✅ **トンネルURL保護**: トンネルURLは外部に公開されず、Auth Worker内でのみ管理
+- ✅ **プロキシ経由のみアクセス**: このWorkerを経由しないとトンネルに接続できない設計
+- ✅ **CORS対応**: ブラウザアプリケーションからの安全なアクセス
+
+### セキュリティの仕組み
+
+```
+Client Request
+  ↓
+[Client ID Check] ← ALLOWED_CLIENT_IDS シークレット
+  ↓ (許可された場合)
+[Auth Worker経由でTunnel URL取得]
+  ↓
+[Tunnel Server]
+```
+
+**重要:** トンネルURLは一切外部に公開されません。クライアントIDのみで接続します。
+
+### 追加推奨セキュリティ対策
+
+本番環境でさらにセキュリティを強化する場合:
+
+- **Cloudflare Access**: エンドユーザー認証の追加
+- **レート制限**: DDoS対策
+- **WAF (Web Application Firewall)**: 攻撃パターンのフィルタリング
+- **ログと監視**: Workers Analytics Engineの活用
+- **API Key認証**: クライアント側での認証トークン
 
 ## 今後の改善予定
 
-- [ ] 認証機能の追加
 - [ ] レート制限の実装
 - [ ] エラーハンドリングの強化
 - [ ] キャッシング戦略の最適化
-- [ ] メトリクスとロギング
+- [ ] メトリクスとロギングの強化
+- [ ] Cloudflare Accessとの統合
 
 ## ライセンス
 
