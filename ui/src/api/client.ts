@@ -180,10 +180,9 @@ export async function fetchGrpcRegistry(clientId: string): Promise<RegistryRespo
     {
       method: 'POST',
       headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
+        'Content-Type': 'application/grpc-web+proto',
       },
-      body: JSON.stringify({}), // Empty body for registry request
+      body: new Uint8Array(0), // Empty body for registry request
     }
   );
 

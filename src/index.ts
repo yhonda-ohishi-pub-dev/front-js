@@ -172,13 +172,16 @@ export default {
 				const targetUrl = new URL(tunnel.tunnelUrl);
 				targetUrl.pathname = '/api/grpc/registry';
 
+				// Forward original Content-Type for gRPC-Web compatibility
+				const forwardHeaders: HeadersInit = {};
+				const contentType = request.headers.get('Content-Type');
+				if (contentType) {
+					forwardHeaders['Content-Type'] = contentType;
+				}
+
 				const tunnelResponse = await fetch(targetUrl.toString(), {
-					method: 'POST',
-					headers: {
-						'Accept': 'application/json',
-						'Content-Type': 'application/json',
-						// Do NOT forward Cloudflare headers - this allows localhost auth bypass
-					},
+					method: request.method,
+					headers: forwardHeaders,
 					body: request.body,
 				});
 
@@ -276,13 +279,16 @@ export default {
 				const targetUrl = new URL(tunnel.tunnelUrl);
 				targetUrl.pathname = '/api/grpc/invoke';
 
+				// Forward original Content-Type for gRPC-Web compatibility
+				const forwardHeaders: HeadersInit = {};
+				const contentType = request.headers.get('Content-Type');
+				if (contentType) {
+					forwardHeaders['Content-Type'] = contentType;
+				}
+
 				const tunnelResponse = await fetch(targetUrl.toString(), {
 					method: 'POST',
-					headers: {
-						'Accept': 'application/json',
-						'Content-Type': 'application/json',
-						// Do NOT forward Cloudflare headers - this allows localhost auth bypass
-					},
+					headers: forwardHeaders,
 					body: request.body,
 				});
 
