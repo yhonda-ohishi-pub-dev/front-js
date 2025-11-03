@@ -314,10 +314,30 @@ export default {
 		}
 
 		// Route: /tunnel/:id/* - Connect to specific tunnel and proxy all paths
+		// Exclude /api/grpc/* paths as they are handled by specific routes above
 		const tunnelMatch = url.pathname.match(/^\/tunnel\/([^\/]+)(\/.*)?$/);
 		if (tunnelMatch) {
 			const tunnelId = tunnelMatch[1];
 			const remainingPath = tunnelMatch[2] || ''; // Path after /tunnel/:id
+
+			// Skip if this is a gRPC API path (handled by specific routes above)
+			if (remainingPath.startsWith('/api/grpc/')) {
+				// This should have been handled by the specific routes above
+				// If we reach here, the method might not be allowed
+				return new Response(
+					JSON.stringify({
+						error: 'Method Not Allowed',
+						message: 'This gRPC endpoint does not support the requested method'
+					}),
+					{
+						status: 405,
+						headers: {
+							'Content-Type': 'application/json',
+							...corsHeaders,
+						},
+					}
+				);
+			}
 
 			try {
 				// Check if client ID is allowed
