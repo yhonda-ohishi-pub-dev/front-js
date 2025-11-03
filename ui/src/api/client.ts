@@ -238,7 +238,7 @@ export async function listGrpcMethods(
       throw new Error('Failed to fetch gRPC methods');
     }
 
-    const data = await response.json();
+    await response.json(); // Reserved for future protobuf parsing
     // Parse file descriptor proto to extract methods
     // This is a simplified version - actual implementation would need protobuf parsing
     return [];

@@ -8,6 +8,7 @@ declare namespace Cloudflare {
 	interface Env {
 		AUTH_SERVICE: Fetcher /* cloudflare-auth-worker */;
 		ALLOWED_CLIENT_IDS?: string /* Comma-separated list of allowed client IDs */;
+		ASSETS?: Fetcher /* Static assets binding for UI */;
 	}
 }
 interface Env extends Cloudflare.Env {}

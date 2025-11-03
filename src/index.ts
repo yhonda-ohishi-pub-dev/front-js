@@ -432,6 +432,18 @@ export default {
 		}
 
 		// Default route
+		// Serve static assets (UI) for all other requests
+		// This includes root path (/), /assets/*, etc.
+		if (env.ASSETS) {
+			try {
+				// Try to serve the requested path from static assets
+				return await env.ASSETS.fetch(request);
+			} catch (error) {
+				console.error('Error serving static asset:', error);
+			}
+		}
+
+		// Fallback: Root information (if no ASSETS binding or error)
 		return new Response(
 			JSON.stringify({
 				message: 'Tunnel URL Service',
