@@ -10,6 +10,7 @@ Cloudflare Workerを使用して、`ohishi-auth.mtamaramu.com`からTunnel URL�
 - **クライアントID制限**: シークレットで許可されたクライアントIDのみアクセス可能
 - **トンネルURL保護**: 外部にトンネルURLを公開しない
 - **CORS対応**: ブラウザからのアクセスをサポート
+- **React UI**: トンネル管理とメソッド実行のためのWebインターフェース（`ui/`ディレクトリ）
 
 ## エンドポイント
 
@@ -98,12 +99,23 @@ npm run cf-typegen
 
 ## 開発
 
-### ローカル開発サーバーの起動
+### Worker開発サーバーの起動
 ```bash
 npm run dev
 ```
 
 開発サーバーは `http://localhost:8787` で起動します。
+
+### React UI開発サーバーの起動
+```bash
+cd ui
+npm install
+npm run dev
+```
+
+UI開発サーバーは `http://localhost:5173` で起動します。
+
+詳細は [`ui/README.md`](ui/README.md) を参照してください。
 
 ### テストの実行
 ```bash

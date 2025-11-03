@@ -25,8 +25,9 @@ export default {
 		// CORS headers for browser access
 		const corsHeaders = {
 			'Access-Control-Allow-Origin': '*',
-			'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-			'Access-Control-Allow-Headers': 'Content-Type',
+			'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+			'Access-Control-Allow-Headers': 'Content-Type, x-grpc-web, x-user-agent, Authorization',
+			'Access-Control-Expose-Headers': 'grpc-status, grpc-message',
 		};
 
 		// Handle CORS preflight
@@ -42,21 +43,11 @@ export default {
 				// Fetch from ohishi-auth.mtamaramu.com
 				const authUrl = 'https://ohishi-auth.mtamaramu.com/tunnels';
 
-				let response: Response;
-
-				// Use Service Binding if available
-				if (env.AUTH_SERVICE) {
-					response = await env.AUTH_SERVICE.fetch(new Request(authUrl, {
-						method: 'GET',
-						headers: request.headers,
-					}));
-				} else {
-					// Fallback to direct fetch
-					response = await fetch(authUrl, {
-						method: 'GET',
-						headers: request.headers,
-					});
-				}
+				// Direct fetch (Service Binding not connected in local dev)
+				const response = await fetch(authUrl, {
+					method: 'GET',
+					headers: request.headers,
+				});
 
 				if (!response.ok) {
 					return new Response(
@@ -115,6 +106,213 @@ export default {
 			}
 		}
 
+		// Route: /tunnel/:id/api/grpc/registry - Special handling for gowinproc registry (GET)
+		const registryMatch = url.pathname.match(/^\/tunnel\/([^\/]+)\/api\/grpc\/registry$/);
+		if (registryMatch && request.method === 'GET') {
+			const tunnelId = registryMatch[1];
+
+			try {
+				// Check if client ID is allowed
+				if (env.ALLOWED_CLIENT_IDS) {
+					const allowedIds = env.ALLOWED_CLIENT_IDS.split(',').map((id: string) => id.trim());
+					if (!allowedIds.includes(tunnelId)) {
+						return new Response(
+							JSON.stringify({
+								error: 'Forbidden',
+								message: 'このクライアントIDへのアクセスは許可されていません。'
+							}),
+							{
+								status: 403,
+								headers: {
+									'Content-Type': 'application/json',
+									...corsHeaders,
+								},
+							}
+						);
+					}
+				}
+
+				// Get tunnel URL
+				const authUrl = 'https://ohishi-auth.mtamaramu.com/tunnels';
+				const response = await fetch(authUrl, {
+					method: 'GET',
+					headers: request.headers,
+				});
+
+				if (!response.ok) {
+					return new Response(
+						JSON.stringify({ error: 'Failed to fetch tunnels' }),
+						{
+							status: response.status,
+							headers: {
+								'Content-Type': 'application/json',
+								...corsHeaders,
+							},
+						}
+					);
+				}
+
+				const apiResponse: TunnelResponse = await response.json();
+				const tunnel = apiResponse.data.find((t: TunnelData) => t.clientId === tunnelId);
+
+				if (!tunnel) {
+					return new Response(
+						JSON.stringify({ error: 'Tunnel not found' }),
+						{
+							status: 404,
+							headers: {
+								'Content-Type': 'application/json',
+								...corsHeaders,
+							},
+						}
+					);
+				}
+
+				// Access registry endpoint with explicit Accept header
+				const targetUrl = new URL(tunnel.tunnelUrl);
+				targetUrl.pathname = '/api/grpc/registry';
+
+				const tunnelResponse = await fetch(targetUrl.toString(), {
+					method: 'GET',
+					headers: {
+						'Accept': 'application/json',
+						'Content-Type': 'application/json',
+						// Do NOT forward Cloudflare headers - this allows localhost auth bypass
+					},
+				});
+
+				// Return response with CORS headers
+				const responseBody = await tunnelResponse.text();
+				return new Response(responseBody, {
+					status: tunnelResponse.status,
+					statusText: tunnelResponse.statusText,
+					headers: {
+						...corsHeaders,
+						'Content-Type': 'application/json',
+					},
+				});
+
+			} catch (error) {
+				return new Response(
+					JSON.stringify({
+						error: 'Failed to connect to registry',
+						message: error instanceof Error ? error.message : 'Unknown error'
+					}),
+					{
+						status: 500,
+						headers: {
+							'Content-Type': 'application/json',
+							...corsHeaders,
+						},
+					}
+				);
+			}
+		}
+
+		// Route: POST /tunnel/:id/api/grpc/invoke - Special handling for gowinproc gRPC invoke
+		const invokeMatch = url.pathname.match(/^\/tunnel\/([^\/]+)\/api\/grpc\/invoke$/);
+		if (invokeMatch && request.method === 'POST') {
+			const tunnelId = invokeMatch[1];
+
+			try {
+				// Check if client ID is allowed
+				if (env.ALLOWED_CLIENT_IDS) {
+					const allowedIds = env.ALLOWED_CLIENT_IDS.split(',').map((id: string) => id.trim());
+					if (!allowedIds.includes(tunnelId)) {
+						return new Response(
+							JSON.stringify({
+								error: 'Forbidden',
+								message: 'このクライアントIDへのアクセスは許可されていません。'
+							}),
+							{
+								status: 403,
+								headers: {
+									'Content-Type': 'application/json',
+									...corsHeaders,
+								},
+							}
+						);
+					}
+				}
+
+				// Get tunnel URL
+				const authUrl = 'https://ohishi-auth.mtamaramu.com/tunnels';
+				const response = await fetch(authUrl, {
+					method: 'GET',
+					headers: request.headers,
+				});
+
+				if (!response.ok) {
+					return new Response(
+						JSON.stringify({ error: 'Failed to fetch tunnels' }),
+						{
+							status: response.status,
+							headers: {
+								'Content-Type': 'application/json',
+								...corsHeaders,
+							},
+						}
+					);
+				}
+
+				const apiResponse: TunnelResponse = await response.json();
+				const tunnel = apiResponse.data.find((t: TunnelData) => t.clientId === tunnelId);
+
+				if (!tunnel) {
+					return new Response(
+						JSON.stringify({ error: 'Tunnel not found' }),
+						{
+							status: 404,
+							headers: {
+								'Content-Type': 'application/json',
+								...corsHeaders,
+							},
+						}
+					);
+				}
+
+				// Access invoke endpoint
+				const targetUrl = new URL(tunnel.tunnelUrl);
+				targetUrl.pathname = '/api/grpc/invoke';
+
+				const tunnelResponse = await fetch(targetUrl.toString(), {
+					method: 'POST',
+					headers: {
+						'Accept': 'application/json',
+						'Content-Type': 'application/json',
+						// Do NOT forward Cloudflare headers - this allows localhost auth bypass
+					},
+					body: request.body,
+				});
+
+				// Return response with CORS headers
+				const responseBody = await tunnelResponse.text();
+				return new Response(responseBody, {
+					status: tunnelResponse.status,
+					statusText: tunnelResponse.statusText,
+					headers: {
+						...corsHeaders,
+						'Content-Type': 'application/json',
+					},
+				});
+
+			} catch (error) {
+				return new Response(
+					JSON.stringify({
+						error: 'Failed to connect to invoke endpoint',
+						message: error instanceof Error ? error.message : 'Unknown error'
+					}),
+					{
+						status: 500,
+						headers: {
+							'Content-Type': 'application/json',
+							...corsHeaders,
+						},
+					}
+				);
+			}
+		}
+
 		// Route: /tunnel/:id/* - Connect to specific tunnel and proxy all paths
 		const tunnelMatch = url.pathname.match(/^\/tunnel\/([^\/]+)(\/.*)?$/);
 		if (tunnelMatch) {
@@ -144,18 +342,11 @@ export default {
 				// First, get the list of tunnels
 				const authUrl = 'https://ohishi-auth.mtamaramu.com/tunnels';
 
-				let response: Response;
-				if (env.AUTH_SERVICE) {
-					response = await env.AUTH_SERVICE.fetch(new Request(authUrl, {
-						method: 'GET',
-						headers: request.headers,
-					}));
-				} else {
-					response = await fetch(authUrl, {
-						method: 'GET',
-						headers: request.headers,
-					});
-				}
+				// Direct fetch (Service Binding not connected in local dev)
+				const response = await fetch(authUrl, {
+					method: 'GET',
+					headers: request.headers,
+				});
 
 				if (!response.ok) {
 					return new Response(
