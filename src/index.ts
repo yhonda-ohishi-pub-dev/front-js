@@ -106,9 +106,9 @@ export default {
 			}
 		}
 
-		// Route: /tunnel/:id/api/grpc/registry - Special handling for gowinproc registry (GET)
+		// Route: /tunnel/:id/api/grpc/registry - Special handling for gowinproc registry (GET or POST)
 		const registryMatch = url.pathname.match(/^\/tunnel\/([^\/]+)\/api\/grpc\/registry$/);
-		if (registryMatch && request.method === 'GET') {
+		if (registryMatch && (request.method === 'GET' || request.method === 'POST')) {
 			const tunnelId = registryMatch[1];
 
 			try {
@@ -168,17 +168,18 @@ export default {
 					);
 				}
 
-				// Access registry endpoint with explicit Accept header
+				// Access registry endpoint with POST method (gRPC-Web typically uses POST)
 				const targetUrl = new URL(tunnel.tunnelUrl);
 				targetUrl.pathname = '/api/grpc/registry';
 
 				const tunnelResponse = await fetch(targetUrl.toString(), {
-					method: 'GET',
+					method: 'POST',
 					headers: {
 						'Accept': 'application/json',
 						'Content-Type': 'application/json',
 						// Do NOT forward Cloudflare headers - this allows localhost auth bypass
 					},
+					body: request.body,
 				});
 
 				// Return response with CORS headers
