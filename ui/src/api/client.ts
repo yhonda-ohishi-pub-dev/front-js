@@ -177,7 +177,7 @@ export interface RegistryResponse {
 export async function fetchGrpcRegistry(clientId: string): Promise<RegistryResponse> {
   const response = await executeTunnelRequest(
     clientId,
-    '/api/grpc/registry',
+    '/api/registry',
     {
       method: 'GET',
       headers: {

@@ -107,8 +107,8 @@ export default {
 			}
 		}
 
-		// Route: /tunnel/:id/api/grpc/registry - gowinproc registry endpoint (GET only, returns JSON)
-		const registryMatch = url.pathname.match(/^\/tunnel\/([^\/]+)\/api\/grpc\/registry$/);
+		// Route: /tunnel/:id/api/registry - gowinproc registry endpoint (GET only, returns JSON)
+		const registryMatch = url.pathname.match(/^\/tunnel\/([^\/]+)\/api\/registry$/);
 		console.log('registryMatch:', registryMatch, 'method:', request.method);
 		if (registryMatch && request.method === 'GET') {
 			console.log('Registry route matched! tunnelId:', registryMatch[1]);
@@ -187,7 +187,7 @@ export default {
 				}
 
 				const targetUrl = new URL(baseUrl);
-				targetUrl.pathname = '/api/grpc/registry';
+				targetUrl.pathname = '/api/registry';
 
 				console.log('Fetching from:', targetUrl.toString());
 
@@ -228,8 +228,8 @@ export default {
 			}
 		}
 
-		// Route: POST /tunnel/:id/api/grpc/invoke - Special handling for gowinproc gRPC invoke
-		const invokeMatch = url.pathname.match(/^\/tunnel\/([^\/]+)\/api\/grpc\/invoke$/);
+		// Route: POST /tunnel/:id/api/invoke - Special handling for gowinproc gRPC invoke
+		const invokeMatch = url.pathname.match(/^\/tunnel\/([^\/]+)\/api\/invoke$/);
 		if (invokeMatch && request.method === 'POST') {
 			const tunnelId = invokeMatch[1];
 
@@ -292,7 +292,7 @@ export default {
 
 				// Access invoke endpoint
 				const targetUrl = new URL(tunnel.tunnelUrl);
-				targetUrl.pathname = '/api/grpc/invoke';
+				targetUrl.pathname = '/api/invoke';
 
 				// Forward original Content-Type for gRPC-Web compatibility
 				const forwardHeaders: HeadersInit = {};
