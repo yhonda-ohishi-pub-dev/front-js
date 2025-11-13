@@ -172,17 +172,17 @@ export interface RegistryResponse {
 /**
  * Fetch gRPC registry from gowinproc
  * Returns services, methods, and message schemas
+ * Note: This is a standard HTTP GET endpoint that returns JSON (not gRPC-Web)
  */
 export async function fetchGrpcRegistry(clientId: string): Promise<RegistryResponse> {
   const response = await executeTunnelRequest(
     clientId,
     '/api/grpc/registry',
     {
-      method: 'POST',
+      method: 'GET',
       headers: {
-        'Content-Type': 'application/grpc-web+proto',
+        'Accept': 'application/json',
       },
-      body: new Uint8Array(0), // Empty body for registry request
     }
   );
 
