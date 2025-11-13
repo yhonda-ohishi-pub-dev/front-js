@@ -21,6 +21,7 @@ interface TunnelResponse {
 export default {
 	async fetch(request: Request, env: Env, _ctx: ExecutionContext): Promise<Response> {
 		const url = new URL(request.url);
+		console.log('Request:', request.method, url.pathname);
 
 		// CORS headers for browser access
 		const corsHeaders = {
@@ -108,7 +109,9 @@ export default {
 
 		// Route: /tunnel/:id/api/grpc/registry - gowinproc registry endpoint (GET only, returns JSON)
 		const registryMatch = url.pathname.match(/^\/tunnel\/([^\/]+)\/api\/grpc\/registry$/);
+		console.log('registryMatch:', registryMatch, 'method:', request.method);
 		if (registryMatch && request.method === 'GET') {
+			console.log('Registry route matched! tunnelId:', registryMatch[1]);
 			const tunnelId = registryMatch[1];
 
 			try {
@@ -169,8 +172,24 @@ export default {
 				}
 
 				// Access registry endpoint (GET, returns JSON)
-				const targetUrl = new URL(tunnel.tunnelUrl);
+				// Check for local development override
+				let baseUrl = tunnel.tunnelUrl;
+				if (env.LOCAL_TUNNEL_URLS) {
+					const overrides = env.LOCAL_TUNNEL_URLS.split(',');
+					for (const override of overrides) {
+						const [id, url] = override.split('=');
+						if (id.trim() === tunnelId) {
+							baseUrl = url.trim();
+							console.log(`Using local override for ${tunnelId}:`, baseUrl);
+							break;
+						}
+					}
+				}
+
+				const targetUrl = new URL(baseUrl);
 				targetUrl.pathname = '/api/grpc/registry';
+
+				console.log('Fetching from:', targetUrl.toString());
 
 				const tunnelResponse = await fetch(targetUrl.toString(), {
 					method: 'GET',
@@ -178,6 +197,8 @@ export default {
 						'Accept': 'application/json',
 					},
 				});
+
+				console.log('Backend response status:', tunnelResponse.status, tunnelResponse.statusText);
 
 				// Return response with CORS headers
 				const responseBody = await tunnelResponse.text();

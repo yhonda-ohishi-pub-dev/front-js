@@ -201,12 +201,15 @@ export async function listGrpcServices(clientId: string): Promise<GrpcService[]>
   try {
     const registry = await fetchGrpcRegistry(clientId);
 
-    // Find the current client in the registry
-    const processInfo = registry.available_processes.find(
-      p => p.name === clientId || p.name.toLowerCase() === clientId.toLowerCase()
-    );
+    // Return all services from all processes
+    const allServices: GrpcService[] = [];
+    for (const process of registry.available_processes) {
+      if (process.services && process.services.length > 0) {
+        allServices.push(...process.services);
+      }
+    }
 
-    return processInfo?.services || [];
+    return allServices;
   } catch (error) {
     console.error('Error fetching gRPC services:', error);
     return [];
