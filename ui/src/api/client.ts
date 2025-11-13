@@ -66,22 +66,34 @@ export async function executeGrpcWebRequest(
   method: string,
   data: any
 ): Promise<any> {
-  const path = `/grpc/${service}/${method}`;
+  // Use /api/invoke endpoint with proper request format
+  const invokeRequest = {
+    process: 'desktop_server', // TODO: derive from service name
+    service: service,
+    method: method,
+    data: data
+  };
 
-  const response = await executeTunnelRequest(clientId, path, {
+  const response = await executeTunnelRequest(clientId, '/api/invoke', {
     method: 'POST',
     headers: {
-      'Content-Type': 'application/grpc-web+json',
+      'Content-Type': 'application/json',
     },
-    body: JSON.stringify(data),
+    body: JSON.stringify(invokeRequest),
   });
 
   if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.message || error.error);
+    const errorText = await response.text();
+    throw new Error(`Failed to invoke gRPC method: ${errorText}`);
   }
 
-  return response.json();
+  const result = await response.json();
+
+  if (!result.success) {
+    throw new Error(result.error || 'gRPC invocation failed');
+  }
+
+  return result.data;
 }
 
 /**
