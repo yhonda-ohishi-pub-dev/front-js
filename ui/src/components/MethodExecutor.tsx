@@ -47,8 +47,10 @@ export function MethodExecutor({ clientId }: MethodExecutorProps) {
     try {
       const grpcData = JSON.parse(requestBody);
       const result = await executeGrpcWebRequest(clientId, service, method, grpcData);
+      console.log('executeGrpcWebRequest result:', result);
       setResponse(result);
     } catch (err) {
+      console.error('executeGrpcWebRequest error:', err);
       setError(err instanceof Error ? err.message : 'リクエストの実行に失敗しました');
     } finally {
       setLoading(false);
@@ -137,15 +139,17 @@ export function MethodExecutor({ clientId }: MethodExecutorProps) {
       </button>
 
       {error && (
-        <div className="error-message">
+        <div className="error-message" style={{ color: 'red', backgroundColor: '#ffebee', padding: '15px', borderRadius: '4px', border: '1px solid #ffcdd2' }}>
           <strong>エラー:</strong> {error}
         </div>
       )}
 
       {response && (
         <div className="response-container">
-          <h3>レスポンス:</h3>
-          <pre>{JSON.stringify(response, null, 2)}</pre>
+          <h3 style={{ color: 'black' }}>レスポンス:</h3>
+          <pre style={{ color: '#000000 !important', backgroundColor: '#f5f5f5', padding: '15px', borderRadius: '4px', border: '2px solid #333' }}>
+            {JSON.stringify(response, null, 2)}
+          </pre>
         </div>
       )}
     </div>

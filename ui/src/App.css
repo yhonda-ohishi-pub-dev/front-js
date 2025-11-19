@@ -312,6 +312,7 @@ body {
   font-family: 'Courier New', monospace;
   font-size: 0.9rem;
   line-height: 1.5;
+  color: #000 !important;
 }
 
 @media (max-width: 1024px) {

@@ -230,7 +230,9 @@ export default {
 
 		// Route: POST /tunnel/:id/api/invoke - Special handling for gowinproc gRPC invoke
 		const invokeMatch = url.pathname.match(/^\/tunnel\/([^\/]+)\/api\/invoke$/);
+		console.log('invokeMatch:', invokeMatch, 'method:', request.method);
 		if (invokeMatch && request.method === 'POST') {
+			console.log('Invoke route matched! tunnelId:', invokeMatch[1]);
 			const tunnelId = invokeMatch[1];
 
 			try {
@@ -291,7 +293,21 @@ export default {
 				}
 
 				// Access invoke endpoint
-				const targetUrl = new URL(tunnel.tunnelUrl);
+				// Check for local development override
+				let baseUrl = tunnel.tunnelUrl;
+				if (env.LOCAL_TUNNEL_URLS) {
+					const overrides = env.LOCAL_TUNNEL_URLS.split(',');
+					for (const override of overrides) {
+						const [id, url] = override.split('=');
+						if (id.trim() === tunnelId) {
+							baseUrl = url.trim();
+							console.log(`Using local override for ${tunnelId}:`, baseUrl);
+							break;
+						}
+					}
+				}
+
+				const targetUrl = new URL(baseUrl);
 				targetUrl.pathname = '/api/invoke';
 
 				// Forward original Content-Type for gRPC-Web compatibility

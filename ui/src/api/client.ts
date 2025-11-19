@@ -58,6 +58,30 @@ export async function executeTunnelRequest(
 }
 
 /**
+ * Find which process provides a given service
+ */
+async function findProcessForService(clientId: string, serviceName: string): Promise<string | null> {
+  try {
+    const registry = await fetchGrpcRegistry(clientId);
+
+    for (const process of registry.available_processes) {
+      if (process.services && process.services.length > 0) {
+        for (const service of process.services) {
+          if (service.name === serviceName) {
+            return process.name;
+          }
+        }
+      }
+    }
+
+    return null;
+  } catch (error) {
+    console.error('Error finding process for service:', error);
+    return null;
+  }
+}
+
+/**
  * Execute a gRPC-Web request through the tunnel proxy
  */
 export async function executeGrpcWebRequest(
@@ -66,9 +90,16 @@ export async function executeGrpcWebRequest(
   method: string,
   data: any
 ): Promise<any> {
+  // Derive process name from service name using registry
+  const processName = await findProcessForService(clientId, service);
+
+  if (!processName) {
+    throw new Error(`Could not find process for service: ${service}`);
+  }
+
   // Use /api/invoke endpoint with proper request format
   const invokeRequest = {
-    process: 'desktop_server', // TODO: derive from service name
+    process: processName,
     service: service,
     method: method,
     data: data
