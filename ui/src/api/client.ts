@@ -3,6 +3,8 @@
  * Provides methods to interact with the Cloudflare Worker endpoints
  */
 
+import { createTunnelClient } from './grpc-tunnel-client';
+
 const WORKER_URL = import.meta.env.VITE_WORKER_URL || 'https://front-js.m-tama-ramu.workers.dev';
 
 export interface TunnelInfo {
@@ -34,6 +36,26 @@ export async function fetchTunnels(): Promise<TunnelsResponse> {
   }
 
   return response.json();
+}
+
+/**
+ * Get tunnel URL for a client ID
+ */
+async function getTunnelUrl(clientId: string): Promise<string> {
+  // Check for local tunnel URLs in environment
+  const localTunnelUrls = import.meta.env.VITE_LOCAL_TUNNEL_URLS;
+  if (localTunnelUrls) {
+    const tunnels = localTunnelUrls.split(',');
+    for (const tunnel of tunnels) {
+      const [id, url] = tunnel.split('=');
+      if (id === clientId) {
+        return url;
+      }
+    }
+  }
+
+  // Use Worker proxy URL
+  return `${WORKER_URL}/tunnel/${clientId}`;
 }
 
 /**
@@ -82,7 +104,7 @@ async function findProcessForService(clientId: string, serviceName: string): Pro
 }
 
 /**
- * Execute a gRPC-Web request through the tunnel proxy
+ * Execute a gRPC-Web request using gRPC-Web protocol
  */
 export async function executeGrpcWebRequest(
   clientId: string,
@@ -97,34 +119,22 @@ export async function executeGrpcWebRequest(
     throw new Error(`Could not find process for service: ${service}`);
   }
 
-  // Use /api/invoke endpoint with proper request format
-  const invokeRequest = {
+  const tunnelUrl = await getTunnelUrl(clientId);
+  const client = createTunnelClient(tunnelUrl);
+
+  // Invoke method using gRPC-Web
+  const response = await client.invokeMethod({
     process: processName,
     service: service,
     method: method,
-    data: data
-  };
-
-  const response = await executeTunnelRequest(clientId, '/api/invoke', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(invokeRequest),
+    data: JSON.stringify(data),
   });
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Failed to invoke gRPC method: ${errorText}`);
+  if (!response.success) {
+    throw new Error(response.error || 'gRPC invocation failed');
   }
 
-  const result = await response.json();
-
-  if (!result.success) {
-    throw new Error(result.error || 'gRPC invocation failed');
-  }
-
-  return result.data;
+  return JSON.parse(response.data);
 }
 
 /**
@@ -213,28 +223,52 @@ export interface RegistryResponse {
 }
 
 /**
- * Fetch gRPC registry from gowinproc
+ * Fetch gRPC registry from gowinproc using gRPC-Web
  * Returns services, methods, and message schemas
- * Note: This is a standard HTTP GET endpoint that returns JSON (not gRPC-Web)
  */
 export async function fetchGrpcRegistry(clientId: string): Promise<RegistryResponse> {
-  const response = await executeTunnelRequest(
-    clientId,
-    '/api/registry',
-    {
-      method: 'GET',
-      headers: {
-        'Accept': 'application/json',
-      },
-    }
-  );
+  const tunnelUrl = await getTunnelUrl(clientId);
+  const client = createTunnelClient(tunnelUrl);
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Failed to fetch gRPC registry: ${errorText}`);
-  }
+  const response = await client.getRegistry();
 
-  return response.json();
+  // Convert pb.RegistryResponse to RegistryResponse
+  return {
+    proxy_base_url: response.proxyBaseUrl,
+    available_processes: response.availableProcesses.map(proc => ({
+      name: proc.name,
+      display_name: proc.displayName,
+      status: proc.status,
+      instances: proc.instances,
+      proxy_path: proc.proxyPath,
+      repository: proc.repository,
+      current_ports: proc.currentPorts,
+      services: proc.services.map(svc => ({
+        name: svc.name,
+        methods: svc.methods.map(method => ({
+          name: method.name,
+          input_type: method.inputType,
+          output_type: method.outputType,
+        })),
+      })),
+      messages: Object.fromEntries(
+        Object.entries(proc.messages).map(([key, msg]) => [
+          key,
+          {
+            name: msg.name,
+            fields: msg.fields.map(field => ({
+              name: field.name,
+              type: field.type,
+              repeated: field.repeated,
+              number: field.number,
+              optional: field.optional,
+            })),
+          },
+        ])
+      ),
+    })),
+    timestamp: response.timestamp,
+  };
 }
 
 /**

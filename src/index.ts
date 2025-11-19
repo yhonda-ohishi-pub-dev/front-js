@@ -228,6 +228,130 @@ export default {
 			}
 		}
 
+		// Route: /tunnel/:id/tunnel.TunnelService/* - gRPC-Web TunnelService endpoints
+		const grpcTunnelMatch = url.pathname.match(/^\/tunnel\/([^\/]+)\/tunnel\.TunnelService\/(.+)$/);
+		if (grpcTunnelMatch) {
+			const tunnelId = grpcTunnelMatch[1];
+			const grpcMethod = grpcTunnelMatch[2]; // GetRegistry or InvokeMethod
+
+			try {
+				// Check if client ID is allowed
+				if (env.ALLOWED_CLIENT_IDS) {
+					const allowedIds = env.ALLOWED_CLIENT_IDS.split(',').map((id: string) => id.trim());
+					if (!allowedIds.includes(tunnelId)) {
+						return new Response(
+							JSON.stringify({
+								error: 'Forbidden',
+								message: 'このクライアントIDへのアクセスは許可されていません。'
+							}),
+							{
+								status: 403,
+								headers: {
+									'Content-Type': 'application/json',
+									...corsHeaders,
+								},
+							}
+						);
+					}
+				}
+
+				// Get tunnel URL
+				const authUrl = 'https://ohishi-auth.mtamaramu.com/tunnels';
+				const response = await fetch(authUrl, {
+					method: 'GET',
+					headers: request.headers,
+				});
+
+				if (!response.ok) {
+					return new Response(
+						JSON.stringify({ error: 'Failed to fetch tunnels' }),
+						{
+							status: response.status,
+							headers: {
+								'Content-Type': 'application/json',
+								...corsHeaders,
+							},
+						}
+					);
+				}
+
+				const apiResponse: TunnelResponse = await response.json();
+				const tunnel = apiResponse.data.find((t: TunnelData) => t.clientId === tunnelId);
+
+				if (!tunnel) {
+					return new Response(
+						JSON.stringify({ error: 'Tunnel not found' }),
+						{
+							status: 404,
+							headers: {
+								'Content-Type': 'application/json',
+								...corsHeaders,
+							},
+						}
+					);
+				}
+
+				// Check for local development override
+				let baseUrl = tunnel.tunnelUrl;
+				if (env.LOCAL_TUNNEL_URLS) {
+					const overrides = env.LOCAL_TUNNEL_URLS.split(',');
+					for (const override of overrides) {
+						const [id, url] = override.split('=');
+						if (id.trim() === tunnelId) {
+							baseUrl = url.trim();
+							console.log(`Using local override for ${tunnelId}:`, baseUrl);
+							break;
+						}
+					}
+				}
+
+				// Forward to gRPC-Web endpoint
+				const targetUrl = new URL(baseUrl);
+				targetUrl.pathname = `/tunnel.TunnelService/${grpcMethod}`;
+
+				// Forward all headers for gRPC-Web
+				const forwardHeaders: HeadersInit = {};
+				request.headers.forEach((value, key) => {
+					forwardHeaders[key] = value;
+				});
+
+				console.log('Forwarding gRPC-Web request to:', targetUrl.toString());
+
+				const tunnelResponse = await fetch(targetUrl.toString(), {
+					method: request.method,
+					headers: forwardHeaders,
+					body: request.body,
+				});
+
+				// Return response with CORS headers and preserve gRPC-Web headers
+				const responseHeaders = new Headers(corsHeaders);
+				tunnelResponse.headers.forEach((value, key) => {
+					responseHeaders.set(key, value);
+				});
+
+				return new Response(tunnelResponse.body, {
+					status: tunnelResponse.status,
+					statusText: tunnelResponse.statusText,
+					headers: responseHeaders,
+				});
+
+			} catch (error) {
+				return new Response(
+					JSON.stringify({
+						error: 'Failed to connect to gRPC-Web endpoint',
+						message: error instanceof Error ? error.message : 'Unknown error'
+					}),
+					{
+						status: 500,
+						headers: {
+							'Content-Type': 'application/json',
+							...corsHeaders,
+						},
+					}
+				);
+			}
+		}
+
 		// Route: POST /tunnel/:id/api/invoke - Special handling for gowinproc gRPC invoke
 		const invokeMatch = url.pathname.match(/^\/tunnel\/([^\/]+)\/api\/invoke$/);
 		console.log('invokeMatch:', invokeMatch, 'method:', request.method);
